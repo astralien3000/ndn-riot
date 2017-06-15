@@ -140,6 +140,19 @@ ndn_app_t* ndn_app_create(void);
 int ndn_app_run(ndn_app_t* handle);
 
 /**
+ * @brief   Runs the event loop (non blocking) with the app handle.
+ *
+ * @details This function is reentrant and can be called from multiple threads.
+ *          However, the same handle cannot be used twice by this function at
+ *          the same time.
+ *
+ * @param[in]  handle    Handle of the app to run.
+ *
+ * @return  One of the return codes for the callbacks.
+ */
+int ndn_app_run_once(ndn_app_t* handle);
+
+/**
  * @brief   Releases the app handle and all associated memory.
  */
 void ndn_app_destroy(ndn_app_t* handle);

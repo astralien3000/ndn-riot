@@ -205,91 +205,118 @@ static int _sched_call_cb(ndn_app_t* handle, msg_t* msg)
     return r;
 }
 
+static int _process_msg(ndn_app_t* handle, msg_t* msg)
+{
+    int ret = NDN_APP_CONTINUE;
+    ndn_shared_block_t* ptr;
+    msg_t reply;
+    reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
+    reply.content.value = (uint32_t)(-ENOTSUP);
+
+    switch (msg->type) {
+        case NDN_APP_MSG_TYPE_TERMINATE:
+            DEBUG("ndn_app: TERMINATE msg received from thread %"
+                  PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+                  msg->sender_pid, handle->id);
+            return NDN_APP_STOP;
+
+        case MSG_XTIMER:
+            DEBUG("ndn_app: XTIMER msg received from thread %"
+                  PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+                  msg->sender_pid, handle->id);
+
+            ret = _sched_call_cb(handle, (msg_t*)msg->content.ptr);
+
+            break;
+
+        case NDN_APP_MSG_TYPE_TIMEOUT:
+            DEBUG("ndn_app: TIMEOUT msg received from thread %"
+                  PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+                  msg->sender_pid, handle->id);
+            ptr = (ndn_shared_block_t*)msg->content.ptr;
+
+            ret = _notify_consumer_timeout(handle, &ptr->block);
+
+            ndn_shared_block_release(ptr);
+
+            break;
+
+        case NDN_APP_MSG_TYPE_INTEREST:
+            DEBUG("ndn_app: INTEREST msg received from thread %"
+                  PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+                  msg->sender_pid, handle->id);
+            ptr = (ndn_shared_block_t*)msg->content.ptr;
+
+            ret = _notify_producer_interest(handle, &ptr->block);
+
+            ndn_shared_block_release(ptr);
+
+            break;
+
+        case NDN_APP_MSG_TYPE_DATA:
+            DEBUG("ndn_app: DATA msg received from thread %"
+                  PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
+                  msg->sender_pid, handle->id);
+            ptr = (ndn_shared_block_t*)msg->content.ptr;
+
+            ret = _notify_consumer_data(handle, &ptr->block);
+
+            ndn_shared_block_release(ptr);
+
+            break;
+
+        case GNRC_NETAPI_MSG_TYPE_GET:
+        case GNRC_NETAPI_MSG_TYPE_SET:
+            msg_reply(msg, &reply);
+            break;
+        default:
+            DEBUG("ndn_app: unknown msg type %u (pid=%" PRIkernel_pid ")\n",
+                  msg->type, handle->id);
+            break;
+    }
+
+    if (ret != NDN_APP_CONTINUE) {
+        DEBUG("ndn_app: stop app because callback returned"
+              " %s (pid=%" PRIkernel_pid ")\n",
+              ret == NDN_APP_STOP ? "STOP" : "ERROR",
+              handle->id);
+        return ret;
+    }
+
+    return ret;
+}
+
 int ndn_app_run(ndn_app_t* handle)
 {
     if (handle == NULL) return NDN_APP_ERROR;
 
-    int ret = NDN_APP_CONTINUE;
-    ndn_shared_block_t* ptr;
-    msg_t msg, reply;
-    reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
-    reply.content.value = (uint32_t)(-ENOTSUP);
+    msg_t msg;
 
     while (1) {
         msg_receive(&msg);
-
-        switch (msg.type) {
-            case NDN_APP_MSG_TYPE_TERMINATE:
-                DEBUG("ndn_app: TERMINATE msg received from thread %"
-                      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
-                      msg.sender_pid, handle->id);
-                return NDN_APP_STOP;
-
-            case MSG_XTIMER:
-                DEBUG("ndn_app: XTIMER msg received from thread %"
-                      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
-                      msg.sender_pid, handle->id);
-
-                ret = _sched_call_cb(handle, (msg_t*)msg.content.ptr);
-
-                break;
-
-            case NDN_APP_MSG_TYPE_TIMEOUT:
-                DEBUG("ndn_app: TIMEOUT msg received from thread %"
-                      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
-                      msg.sender_pid, handle->id);
-                ptr = (ndn_shared_block_t*)msg.content.ptr;
-
-                ret = _notify_consumer_timeout(handle, &ptr->block);
-
-                ndn_shared_block_release(ptr);
-
-                break;
-
-            case NDN_APP_MSG_TYPE_INTEREST:
-                DEBUG("ndn_app: INTEREST msg received from thread %"
-                      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
-                      msg.sender_pid, handle->id);
-                ptr = (ndn_shared_block_t*)msg.content.ptr;
-
-                ret = _notify_producer_interest(handle, &ptr->block);
-
-                ndn_shared_block_release(ptr);
-
-                break;
-
-            case NDN_APP_MSG_TYPE_DATA:
-                DEBUG("ndn_app: DATA msg received from thread %"
-                      PRIkernel_pid " (pid=%" PRIkernel_pid ")\n",
-                      msg.sender_pid, handle->id);
-                ptr = (ndn_shared_block_t*)msg.content.ptr;
-
-                ret = _notify_consumer_data(handle, &ptr->block);
-
-                ndn_shared_block_release(ptr);
-
-                break;
-
-            case GNRC_NETAPI_MSG_TYPE_GET:
-            case GNRC_NETAPI_MSG_TYPE_SET:
-                msg_reply(&msg, &reply);
-                break;
-            default:
-                DEBUG("ndn_app: unknown msg type %u (pid=%" PRIkernel_pid ")\n",
-                      msg.type, handle->id);
-                break;
-        }
-
-        if (ret != NDN_APP_CONTINUE) {
-            DEBUG("ndn_app: stop app because callback returned"
-                  " %s (pid=%" PRIkernel_pid ")\n",
-                  ret == NDN_APP_STOP ? "STOP" : "ERROR",
-                  handle->id);
-            return ret;
+        int rc = _process_msg(handle, &msg);
+        if (rc != NDN_APP_CONTINUE) {
+            return rc;
         }
     }
 
-    return ret;
+    return NDN_APP_STOP;
+}
+
+int ndn_app_run_once(ndn_app_t* handle)
+{
+    if (handle == NULL) return NDN_APP_ERROR;
+
+    msg_t msg;
+
+    while (msg_try_receive(&msg) == 1) {
+        int rc = _process_msg(handle, &msg);
+        if (rc != NDN_APP_CONTINUE) {
+            return rc;
+        }
+    }
+
+    return NDN_APP_STOP;
 }
 
 static inline void _release_sched_cb_table(ndn_app_t* handle)
