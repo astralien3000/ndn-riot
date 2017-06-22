@@ -127,6 +127,7 @@ static void _process_data(kernel_pid_t face_id, int face_type,
     } else {
 	// otherwise drop unsolicited data
 	DEBUG("ndn: no matching pit entry found for data\n");
+  ndn_cs_add(sd);
     }
     ndn_shared_block_release(sd);
 }
