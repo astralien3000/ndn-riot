@@ -22,7 +22,7 @@
 #include "msg-type.h"
 #include "ndn.h"
 
-#define ENABLE_DEBUG 1
+#define ENABLE_DEBUG 0
 
 #include <debug.h>
 #include <msg.h>
