@@ -24,7 +24,7 @@
 #include "encoding/name.h"
 #include "encoding/interest.h"
 
-#define ENABLE_DEBUG 1
+#define ENABLE_DEBUG 0
 #include <debug.h>
 
 #define STRATEGY_TABLE_MAX_SIZE 8

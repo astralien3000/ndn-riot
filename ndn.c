@@ -29,7 +29,7 @@
 #include "encoding/interest.h"
 #include "msg-type.h"
 
-#define ENABLE_DEBUG 1
+#define ENABLE_DEBUG 0
 #include <debug.h>
 #include <net/gnrc/netapi.h>
 #include <net/gnrc/netif.h>
