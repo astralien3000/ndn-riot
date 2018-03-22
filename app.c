@@ -207,6 +207,18 @@ static int _sched_call_cb(ndn_app_t* handle, msg_t* msg)
 
 int ndn_app_run(ndn_app_t* handle)
 {
+  while(1) {
+    int rc = ndn_app_run_once(handle);
+    if(rc != NDN_APP_CONTINUE) {
+      return rc;
+    }
+    thread_sleep();
+  }
+  return NDN_APP_STOP;
+}
+
+int ndn_app_run_once(ndn_app_t* handle)
+{
     if (handle == NULL) return NDN_APP_ERROR;
 
     int ret = NDN_APP_CONTINUE;
@@ -215,9 +227,7 @@ int ndn_app_run(ndn_app_t* handle)
     reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
     reply.content.value = (uint32_t)(-ENOTSUP);
 
-    while (1) {
-        msg_receive(&msg);
-
+    while (msg_try_receive(&msg) == 1) {
         switch (msg.type) {
             case NDN_APP_MSG_TYPE_TERMINATE:
                 DEBUG("ndn_app: TERMINATE msg received from thread %"
